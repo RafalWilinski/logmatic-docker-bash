@@ -21,6 +21,7 @@ formatEvent() {
 }
 
 formatStat() {
+  echo "$apiKey id=$1 cpu=$2 memUsage=$3 memAvail=$6 netIn=$9"
   echo "$apiKey id=$1 cpu=$2 memUsage=$3 memAvail=$6 netIn=$9" >&3
 }
 
@@ -43,6 +44,8 @@ if [ -z "$apiKey" ]
 then
   echo "API Key was not provided. Please supply it with an '-a' flag."
   exit 1;
+else 
+  echo "Starting docker-logmatic..."
 fi
 
 # Open socket to Logmatic.io under file descriptor #3
@@ -54,24 +57,26 @@ docker ps --format '{{.ID}} {{.Names}} {{.Image}}' | while read line; do
 done
 
 # Discover any new containers and also forward logs from them
-docker events --filter event=start | while read line; do
-  id=$(echo $line | cut -d ' ' -f 4)
-  echo "Starting $id"
-
-  docker ps -f "id=$id" --format '{{.ID}} {{.Names}} {{.Image}}' | while read line; do
-    startFwd $line
-  done
-done
-
-# Forward any docker events to socket
 docker events | while read line; do
   formatEvent $line
+  id=$(echo $line | cut -d ' ' -f 4)
+  event=$(echo $line | cut -d ' ' -f 3)
+  
+  if [ "$event" = "start" ] 
+  then
+    echo "New container detected!"
+    docker ps -f "id=$id" --format '{{.ID}} {{.Names}} {{.Image}}' | while read line; do
+      echo $line
+      startFwd $line
+    done
+  fi
 done
 
 # Gather stats every N seconds and forward 
 while :
 do
   docker stats --no-stream | tail -n +2 | while read line; do
+    echo $line;
     formatStat $line
   done
 
