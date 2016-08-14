@@ -16,6 +16,10 @@ formatMsg() {
   done;
 }
 
+formatEvent() {
+  echo "$apiKey type=$2 event=$3 id=$4" >&3
+}
+
 startFwd() {
   echo "Forwarding logs from $1"
   echo $1 | xargs docker logs --follow --details | formatMsg $1 $2 $3 &
@@ -54,3 +58,7 @@ docker events --filter event=start | while read line; do
   done
 done
 
+# Forward any docker events to socket
+docker events | while read line; do
+  formatEvent $line
+done
