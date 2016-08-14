@@ -2,6 +2,7 @@
 apiKey=""
 host="api.logmatic.io"
 port="10514"
+forwardEvents=false
 statsRefreshInterval=10
 
 ###
@@ -17,7 +18,9 @@ formatMsg() {
 }
 
 formatEvent() {
-  echo "$apiKey type=$2 event=$3 id=$4" >&3
+  if [ "$forwardEvents" = true ] ; then
+    echo "$apiKey type=$2 event=$3 id=$4" >&3
+  fi
 }
 
 formatStat() {
@@ -30,11 +33,12 @@ startFwd() {
   echo $1 | xargs docker logs --follow --details | formatMsg $1 $2 $3 &
 }
 
-while getopts 'a:h:p:s:' flag; do
+while getopts 'a:h:p:s:e' flag; do
   case "${flag}" in 
     a) apiKey="${OPTARG}" ;;
     h) host="${OPTARG}" ;;
     p) port="${OPTARG}" ;;
+    e) forwardEvents=true ;;
     s) statsRefreshInterval="${OPTARG}" ;;
     *) error "Unexpected option ${flag}" ;;
   esac
@@ -56,22 +60,6 @@ docker ps --format '{{.ID}} {{.Names}} {{.Image}}' | while read line; do
   startFwd $line
 done
 
-# Discover any new containers and also forward logs from them
-docker events | while read line; do
-  formatEvent $line
-  id=$(echo $line | cut -d ' ' -f 4)
-  event=$(echo $line | cut -d ' ' -f 3)
-  
-  if [ "$event" = "start" ] 
-  then
-    echo "New container detected!"
-    docker ps -f "id=$id" --format '{{.ID}} {{.Names}} {{.Image}}' | while read line; do
-      echo $line
-      startFwd $line
-    done
-  fi
-done
-
 # Gather stats every N seconds and forward 
 while :
 do
@@ -81,4 +69,20 @@ do
   done
 
   sleep $statsRefreshInterval
+done &
+
+# Forward docker events 
+docker events | while read line; do
+  formatEvent $line
+  id=$(echo $line | cut -d ' ' -f 4)
+  event=$(echo $line | cut -d ' ' -f 3)
+  
+  # Discover any new containers and also forward logs from them
+  if [ "$event" = "start" ] 
+  then
+    echo "New container detected!"
+    docker ps -f "id=$id" --format '{{.ID}} {{.Names}} {{.Image}}' | while read line; do
+      startFwd $line
+    done
+  fi
 done

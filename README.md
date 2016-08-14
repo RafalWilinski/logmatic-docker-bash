@@ -8,5 +8,5 @@ Tested only on OS X.
 
 ```
 chmod a+x ./logmatic.sh
-./logmatic.sh -a <YOUR_API_KEY>
+./logmatic.sh -e -a <YOUR_API_KEY>
 ```
