@@ -20,16 +20,21 @@ formatEvent() {
   echo "$apiKey type=$2 event=$3 id=$4" >&3
 }
 
+formatStat() {
+  echo "$apiKey id=$1 cpu=$2 memUsage=$3 memAvail=$6 netIn=$9" >&3
+}
+
 startFwd() {
   echo "Forwarding logs from $1"
   echo $1 | xargs docker logs --follow --details | formatMsg $1 $2 $3 &
 }
 
-while getopts 'a:h:p:' flag; do
+while getopts 'a:h:p:s:' flag; do
   case "${flag}" in 
     a) apiKey="${OPTARG}" ;;
     h) host="${OPTARG}" ;;
     p) port="${OPTARG}" ;;
+    s) statsRefreshInterval="${OPTARG}" ;;
     *) error "Unexpected option ${flag}" ;;
   esac
 done
@@ -61,4 +66,14 @@ done
 # Forward any docker events to socket
 docker events | while read line; do
   formatEvent $line
+done
+
+# Gather stats every N seconds and forward 
+while :
+do
+  docker stats --no-stream | tail -n +2 | while read line; do
+    formatStat $line
+  done
+
+  sleep $statsRefreshInterval
 done
